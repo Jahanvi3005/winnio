@@ -4,7 +4,12 @@
 - **Track A:** Agent Builders
 - **Track D:** 3D & Visualization
 
-## Track A: S.M.I.L.E. Methodology Reflection (3 Sentences)
+## Track A: S.M.I.L.E. Methodology Reflection & LLM Output
+I **chose** to run the **llama** model locally via Ollama because it is efficient and fits perfectly within my available System **RAM** constraints.
+
+**Model Output:** "A digital twin is a virtual representation of an object or system that spans its lifecycle, is updated from real-time data, and uses simulation, machine learning and reasoning to help decision-making."
+
+**Reflection:**
 What surprised me most about the S.M.I.L.E. methodology is its 'impact first, data last' principle, which fundamentally flips traditional data engineering approaches on their head. Rather than starting with sensor deployments and raw telemetry, it demands mapping out the sociotechnological boundaries using a 'Reality Canvas' before building systems. Furthermore, the concept of a Minimal Viable Twin (MVT) to validate hypotheses virtually before physical implementation represents a brilliant shift in how we can de-risk complex AI agent integrations.
 
 ## Track D: Reality Canvas Concept - Smart Building
