@@ -11,7 +11,8 @@ It calls the following LPI Context Tools:
 
 ### Explainable AI & Security Routing
 The agent incorporates explicit Explainable AI (XAI) provenance tracking. After synthesizing the text, the agent forcibly logs exactly which tools were invoked along with the exact input arguments parsed at execution time. 
-From a security context, it includes `try/except` guardrails, timeout configurations (`proc.wait(timeout=5)`), and string-size input sanitization to prevent pipeline crashes. Includes a standardized `.well-known/agent.json` Agent Card declaring its capabilities.
+From a security context, it includes `try/except` guardrails, timeout configurations (`proc.wait(timeout=5)`), and string-size input sanitization to prevent pipeline crashes. Includes a standardized `agent.json` Agent Card declaring its capabilities.
+*Tier 11+ Updates:* Upgraded to use non-blocking `select.select()` timeouts, precise JSON-RPC ID tracking, and active process crash polling (`process.poll()`) for enterprise-grade exception handling.
 
 ### Setup & Run
 Instructions to install and run the code are provided natively inside the agent repository's `README.md`.
