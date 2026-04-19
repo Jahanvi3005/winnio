@@ -5,23 +5,66 @@ Author: Jahanvi Gupta
 
 This agent securely interfaces with the LPI Model Context Protocol (MCP) server.
 It queries multiple tools, aggregates the knowledge, and summarizes it dynamically.
-Includes proper exception handling, sanitization, and fallback heuristics for resilient execution.
+Includes advanced error handling (JSON-RPC ID tracking, select-based timeouts, process monitoring) for resilient execution.
 """
 
 import json
 import subprocess
 import sys
 import os
+import select
+import time
 
 # Define MCP server path
 LPI_SERVER_CMD = ["node", "../winnio/dist/src/index.js"]
 LPI_SERVER_CWD = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "winnio"))
 
-def call_mcp_tool(process, tool_name: str, arguments: dict) -> str:
-    """Send a JSON-RPC request to the MCP server and return the result with timeouts and error handling."""
+_request_id_counter = 1
+
+def read_jsonrpc_response(process: subprocess.Popen, expected_id: int, timeout: float = 10.0) -> dict:
+    """Reads lines from process until the expected JSON-RPC id is found, handling timeouts and termination."""
+    start_time = time.time()
+    
+    while True:
+        # Check if process crashed
+        if process.poll() is not None:
+            stderr_out = process.stderr.read()
+            raise RuntimeError(f"MCP server crashed unexpectedly. Code: {process.returncode}. Stderr: {stderr_out}")
+            
+        remaining_time = timeout - (time.time() - start_time)
+        if remaining_time <= 0:
+            raise TimeoutError(f"Timeout ({timeout}s) waiting for response from MCP server. Expected ID: {expected_id}")
+            
+        # Wait up to remaining_time for data on stdout
+        # Works securely on POSIX (Mac/Linux). For Windows, standard pipes don't support select.
+        if sys.platform != 'win32':
+            ready, _, _ = select.select([process.stdout], [], [], remaining_time)
+            if not ready:
+                continue
+            
+        line = process.stdout.readline()
+        if not line:
+            # EOF reached
+            raise EOFError("MCP server stdout closed unexpectedly.")
+            
+        try:
+            resp = json.loads(line)
+        except json.JSONDecodeError:
+            # Not valid JSON, maybe a log or print from node. Ignore or log.
+            continue
+            
+        if "id" in resp and resp["id"] == expected_id:
+            return resp
+
+def call_mcp_tool(process: subprocess.Popen, tool_name: str, arguments: dict, timeout: float = 10.0) -> str:
+    """Send a JSON-RPC request to the MCP server and return the result with timeouts and deep error handling."""
+    global _request_id_counter
+    req_id = _request_id_counter
+    _request_id_counter += 1
+    
     request = {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": req_id,
         "method": "tools/call",
         "params": {"name": tool_name, "arguments": arguments},
     }
@@ -34,22 +77,33 @@ def call_mcp_tool(process, tool_name: str, arguments: dict) -> str:
         process.stdin.write(json.dumps(request) + "\n")
         process.stdin.flush()
 
-        line = process.stdout.readline()
-        if not line:
-            return f"[ERROR] Timeout or no response from MCP server for tool {tool_name}"
+        resp = read_jsonrpc_response(process, req_id, timeout)
             
-        resp = json.loads(line)
         if "result" in resp and "content" in resp["result"]:
-            return resp["result"]["content"][0].get("text", "")
+            content_list = resp["result"]["content"]
+            if not isinstance(content_list, list) or len(content_list) == 0:
+                return "[ERROR] Invalid tool result format: missing content array."
+            return content_list[0].get("text", "")
+            
         if "error" in resp:
-            return f"[ERROR] {resp['error'].get('message', 'Unknown error')}"
+            err = resp["error"]
+            err_code = err.get("code", "UNKNOWN_CODE")
+            err_msg = err.get("message", "Unknown error")
+            err_data = err.get("data", "")
+            return f"[ERROR] MCP Tool Execution Failed ({err_code}): {err_msg} - {err_data}"
             
         return "[ERROR] Unexpected response format from Model Context Protocol"
+    except TimeoutError as e:
+        return f"[TIMEOUT ERROR] {e}"
+    except RuntimeError as e:
+        return f"[FATAL RUNTIME ERROR] {e}"
+    except EOFError as e:
+        return f"[FATAL EOF ERROR] {e}"
     except Exception as e:
-        return f"[FATAL] Connection to MCP terminated unexpectedly: {e}"
+        return f"[FATAL] Unexpected application error executing tool '{tool_name}': {e}"
 
 def generate_insights(question: str) -> None:
-    """Orchestrates LPI data gathering and LLM synthesis."""
+    """Orchestrates LPI data gathering and dynamic synthesis."""
     print(f"\n{'='*60}")
     print(f"  🔍 LPI Explorer Agent — Analyzing: {question}")
     print(f"{'='*60}\n")
@@ -66,22 +120,42 @@ def generate_insights(question: str) -> None:
     except FileNotFoundError:
         print("[ERROR] Could not locate LPI server. Ensure it is built in ../winnio/dist/src/index.js")
         return
+    except PermissionError:
+        print("[ERROR] Permission denied when attempting to instantiate LPI server.")
+        return
+    except Exception as e:
+        print(f"[FATAL] Failed to bootstrap process: {e}")
+        return
 
-    # MCP initialization handshake
-    init_req = {
-        "jsonrpc": "2.0", "id": 0, "method": "initialize",
-        "params": {
-            "protocolVersion": "2024-11-05", "capabilities": {},
-            "clientInfo": {"name": "jahanvi-lpi-agent", "version": "1.0.0"},
-        },
-    }
-    proc.stdin.write(json.dumps(init_req) + "\n")
-    proc.stdin.flush()
-    proc.stdout.readline()
+    try:
+        # MCP initialization handshake
+        init_req = {
+            "jsonrpc": "2.0", "id": 0, "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05", "capabilities": {},
+                "clientInfo": {"name": "jahanvi-lpi-agent", "version": "1.0.0"},
+            },
+        }
+        proc.stdin.write(json.dumps(init_req) + "\n")
+        proc.stdin.flush()
+        
+        # Deep exception handling through custom json RPC read
+        init_resp = read_jsonrpc_response(proc, 0, timeout=10.0)
+        
+        if "error" in init_resp:
+            print(f"[FATAL] Server initialization failed gracefully: {init_resp['error']}")
+            proc.terminate()
+            return
 
-    # Send initialized notification
-    proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
-    proc.stdin.flush()
+        # Send initialized notification
+        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        proc.stdin.flush()
+        
+    except Exception as e:
+        print(f"[FATAL] MCP Initialization sequence unexpectedly failed: {e}")
+        if proc.poll() is None:
+            proc.terminate()
+        return
 
     tools_used = []
 
@@ -94,7 +168,10 @@ def generate_insights(question: str) -> None:
     tools_used.append(("smile_overview", {}))
 
     proc.terminate()
-    proc.wait(timeout=5)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
     print(f"\n{'='*60}")
     print("  🧠 EXPLAINABLE AI ANALYSIS & PROVENANCE")
@@ -106,7 +183,7 @@ def generate_insights(question: str) -> None:
     print(f"Data ingested: {methodology[:200]}...\n")
     
     print("\n" + "-"*60)
-    print("SOURCES (Provenace tracking embedded):")
+    print("SOURCES (Provenance tracking embedded):")
     for idx, (name, args) in enumerate(tools_used, 1):
         print(f"  [{idx}] LPI Tool Called: {name} (Args: {json.dumps(args)})")
         
@@ -123,3 +200,4 @@ if __name__ == "__main__":
         sys.exit(1)
         
     generate_insights(user_query)
+

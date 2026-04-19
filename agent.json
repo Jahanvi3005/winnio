@@ -1,23 +1,44 @@
 {
-  "protocol": "A2A/1.0",
-  "identity": {
-    "name": "Jahanvi's LPI Explorer Agent",
-    "developer": "Jahanvi Gupta",
-    "version": "1.0.0",
-    "description": "An AI agent that specializes in querying the Life Programmable Interface (LPI) to extract insights regarding Digital Twin implementations, knowledge graphs, and the S.M.I.L.E. mapping methodology."
-  },
+  "name": "Jahanvi's LPI Explorer Agent",
+  "description": "An AI agent that specializes in querying the Life Programmable Interface (LPI) to extract insights regarding Digital Twin implementations, knowledge graphs, and the S.M.I.L.E. mapping methodology. It queries the knowledge base and methodology overview to answer user queries with clear provenance.",
+  "url": "https://github.com/Jahanvi3005/winnio",
+  "version": "1.0.0",
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["text/plain"],
   "capabilities": {
-    "tools": [
-      {
-        "name": "digital_twin_analyzer",
-        "description": "Generates aggregated implementation analysis by polling primary digital twin architecture sources."
-      }
-    ],
-    "context_window": 4096,
-    "mcp_compatible": true
+    "streaming": false,
+    "pushNotifications": false
   },
-  "communication": {
-    "supported_formats": ["json", "markdown"],
-    "requires_human_approval": false
+  "supportedInterfaces": [
+    {
+      "protocolBinding": "MCP-stdio",
+      "url": "local://python agent/agent.py",
+      "comment": "Local subprocess communicating with LPI server."
+    }
+  ],
+  "skills": [
+    {
+      "id": "digital_twin_analyzer",
+      "name": "Digital Twin Insights Aggregator",
+      "description": "Generates aggregated implementation analysis by polling primary digital twin architecture sources and the S.M.I.L.E. methodology overview.",
+      "tags": ["digital-twin", "smile", "insights", "mcp"],
+      "examples": [
+        "What is the SMILE methodology and how do I start?",
+        "How are digital twins implemented in healthcare?"
+      ]
+    }
+  ],
+  "authentication": {
+    "schemes": ["none"]
+  },
+  "provider": {
+    "organization": "Jahanvi Gupta",
+    "url": "https://github.com/Jahanvi3005"
+  },
+  "_lpiMetadata": {
+    "lpiToolsUsed": ["query_knowledge", "smile_overview"],
+    "llmProvider": "none",
+    "llmModel": "none",
+    "explainability": "The agent explicitly cites the LPI tools used to synthesize data and provides an exact log of tool calls and parameters in its provenance tracking footer."
   }
 }
