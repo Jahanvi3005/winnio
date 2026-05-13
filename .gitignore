@@ -1,0 +1,15 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Streamlit
+.streamlit/
+
+# macOS
+.DS_Store
+
+# Data
+*.csv
+!submissions/jahanvi/level6/data/*.csv

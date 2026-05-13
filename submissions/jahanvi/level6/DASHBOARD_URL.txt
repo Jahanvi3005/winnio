@@ -1,0 +1,3 @@
+# Replace this line with your deployed Streamlit URL after deployment
+# Example: https://jahanvi-vsab-factory.streamlit.app
+https://YOUR_APP.streamlit.app

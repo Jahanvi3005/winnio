@@ -1,0 +1,11 @@
+# Python env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Credentials — NEVER commit this
+.env
+
+# macOS
+.DS_Store
