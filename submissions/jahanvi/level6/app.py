@@ -1,9 +1,3 @@
-"""
-app.py
-======
-VSAB Factory Knowledge Graph — Streamlit Dashboard
-Powered by Neo4j AuraDB
-"""
 
 import os
 import streamlit as st
@@ -13,15 +7,11 @@ import plotly.graph_objects as go
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 
-# Load environment variables from .env if present
-# This helps when running locally in nested folders
 from pathlib import Path
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-# ---------------------------------------------------------------------------
-# Page config
-# ---------------------------------------------------------------------------
+
 st.set_page_config(
     page_title="VSAB Factory Dashboard",
     page_icon="🏭",
@@ -29,12 +19,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ---------------------------------------------------------------------------
-# Neo4j connection (cached)
-# ---------------------------------------------------------------------------
+
 @st.cache_resource
 def get_driver():
-    # Try secrets first (Streamlit Cloud)
+    
     try:
         uri = st.secrets.get("NEO4J_URI")
         user = st.secrets.get("NEO4J_USER")
@@ -42,7 +30,7 @@ def get_driver():
     except Exception:
         uri = user = password = None
 
-    # Fallback to os.environ (Local .env)
+    
     if not uri:
         uri = os.getenv("NEO4J_URI")
     if not user:
@@ -69,9 +57,7 @@ def run_query(query, params=None):
         return [dict(r) for r in result]
 
 
-# ---------------------------------------------------------------------------
-# Custom CSS — dark industrial theme
-# ---------------------------------------------------------------------------
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
@@ -124,9 +110,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------------------------
-# Sidebar navigation
-# ---------------------------------------------------------------------------
+
 PAGES = [
     "🏠 Project Overview",
     "🏭 Station Load",
@@ -145,9 +129,7 @@ with st.sidebar:
     st.caption("Data: Neo4j AuraDB  \nVisuals: Plotly + Streamlit")
 
 
-# ===========================================================================
-# PAGE 1 — Project Overview
-# ===========================================================================
+
 if page == PAGES[0]:
     st.markdown("""
     <div class="page-header">
@@ -172,7 +154,7 @@ if page == PAGES[0]:
             lambda v: "🔴 Over" if v > 10 else ("🟡 Watch" if v > 0 else "🟢 On Track")
         )
 
-        # Summary metrics
+        
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Projects", len(df))
         c2.metric("Total Planned (h)", f"{df['planned'].sum():,.0f}")
@@ -181,7 +163,7 @@ if page == PAGES[0]:
 
         st.divider()
 
-        # Grouped bar chart
+        
         fig = go.Figure()
         fig.add_bar(x=df["project"], y=df["planned"], name="Planned", marker_color="#3b82f6")
         fig.add_bar(x=df["project"], y=df["actual"],  name="Actual",  marker_color="#8b5cf6")
@@ -195,13 +177,13 @@ if page == PAGES[0]:
         fig.update_yaxes(gridcolor="#1e293b")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Table
+        
         st.subheader("📋 Project Details")
         display = df[["project", "planned", "actual", "variance_pct", "status"]].copy()
         display.columns = ["Project", "Planned (h)", "Actual (h)", "Variance %", "Status"]
         st.dataframe(display, use_container_width=True, hide_index=True)
 
-        # Product breakdown per project
+        
         st.subheader("🔩 Products per Project")
         prod_rows = run_query("""
             MATCH (p:Project)-[:PRODUCES]->(prod:Product)
@@ -214,9 +196,7 @@ if page == PAGES[0]:
             st.dataframe(pdf, use_container_width=True, hide_index=True)
 
 
-# ===========================================================================
-# PAGE 2 — Station Load
-# ===========================================================================
+
 elif page == PAGES[1]:
     st.markdown("""
     <div class="page-header">
@@ -239,7 +219,7 @@ elif page == PAGES[1]:
         df["over_planned"] = df["actual"] > df["planned"]
         df["variance"] = ((df["actual"] - df["planned"]) / df["planned"] * 100).round(1)
 
-        # Heatmap — actual hours
+        
         pivot = df.pivot_table(index="station", columns="week", values="actual", aggfunc="sum")
         fig_heat = px.imshow(
             pivot,
@@ -254,7 +234,7 @@ elif page == PAGES[1]:
         )
         st.plotly_chart(fig_heat, use_container_width=True)
 
-        # Grouped bar — per station
+        
         station_sum = df.groupby("station")[["planned", "actual"]].sum().reset_index()
         station_sum["color"] = station_sum.apply(
             lambda r: "#f87171" if r["actual"] > r["planned"] else "#4ade80", axis=1
@@ -274,7 +254,7 @@ elif page == PAGES[1]:
         fig2.update_yaxes(gridcolor="#1e293b")
         st.plotly_chart(fig2, use_container_width=True)
 
-        # Highlight overloaded combos
+        
         overloaded = df[df["over_planned"]].sort_values("variance", ascending=False)
         if not overloaded.empty:
             st.error(f"⚠️ {len(overloaded)} station-week combos where actual > planned")
@@ -288,9 +268,7 @@ elif page == PAGES[1]:
             st.success("All stations are within planned hours ✅")
 
 
-# ===========================================================================
-# PAGE 3 — Capacity Tracker
-# ===========================================================================
+
 elif page == PAGES[2]:
     st.markdown("""
     <div class="page-header">
@@ -319,7 +297,7 @@ elif page == PAGES[2]:
 
         st.divider()
 
-        # Capacity vs Demand
+        
         fig = go.Figure()
         fig.add_scatter(x=df["week"], y=df["capacity"], name="Total Capacity",
                         line=dict(color="#4ade80", width=2.5), mode="lines+markers",
@@ -329,7 +307,7 @@ elif page == PAGES[2]:
                         mode="lines+markers", marker=dict(size=8))
         fig.add_bar(x=df["week"], y=df["overtime"], name="Overtime", marker_color="#fbbf24", opacity=0.6)
 
-        # Shade deficit weeks
+        
         for _, row in df[df["deficit"] < 0].iterrows():
             fig.add_vrect(
                 x0=row["week"], x1=row["week"],
@@ -346,7 +324,7 @@ elif page == PAGES[2]:
         fig.update_yaxes(gridcolor="#1e293b", title="Hours")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Stacked bar — staffing breakdown
+       
         fig2 = go.Figure()
         fig2.add_bar(x=df["week"], y=df["own"],      name="Own Staff",   marker_color="#3b82f6")
         fig2.add_bar(x=df["week"], y=df["hired"],    name="Hired Staff", marker_color="#8b5cf6")
@@ -360,16 +338,14 @@ elif page == PAGES[2]:
         fig2.update_yaxes(gridcolor="#1e293b", title="Hours")
         st.plotly_chart(fig2, use_container_width=True)
 
-        # Data table
+        
         st.subheader("📋 Week-by-Week Summary")
         display = df[["week", "own", "hired", "overtime", "capacity", "planned", "deficit_label"]].copy()
         display.columns = ["Week", "Own (h)", "Hired (h)", "OT (h)", "Capacity (h)", "Planned (h)", "Deficit"]
         st.dataframe(display, use_container_width=True, hide_index=True)
 
 
-# ===========================================================================
-# PAGE 4 — Worker Coverage
-# ===========================================================================
+
 elif page == PAGES[3]:
     st.markdown("""
     <div class="page-header">
@@ -377,7 +353,7 @@ elif page == PAGES[3]:
         <p>Who can cover what — and where are the single points of failure?</p>
     </div>""", unsafe_allow_html=True)
 
-    # Coverage matrix
+    
     cov_rows = run_query("""
         MATCH (s:Station)
         OPTIONAL MATCH (w:Worker)-[:WORKS_AT|CAN_COVER]->(s)
@@ -394,7 +370,7 @@ elif page == PAGES[3]:
             lambda c: "🔴 SPOF" if c == 1 else ("🟡 Low" if c == 2 else "🟢 OK")
         )
 
-        # Metrics
+        
         spof = (df_cov["worker_count"] == 1).sum()
         c1, c2, c3 = st.columns(3)
         c1.metric("Stations",       len(df_cov))
@@ -404,7 +380,7 @@ elif page == PAGES[3]:
 
         st.divider()
 
-        # Bar chart — workers per station
+        
         fig = px.bar(
             df_cov, x="station", y="worker_count",
             color="risk",
@@ -421,7 +397,7 @@ elif page == PAGES[3]:
         fig.update_yaxes(gridcolor="#1e293b")
         st.plotly_chart(fig, use_container_width=True)
 
-        # Matrix table
+        
         st.subheader("🗂️ Coverage Matrix")
         st.dataframe(
             df_cov[["station", "worker_count", "risk", "workers_str"]].rename(columns={
@@ -431,7 +407,7 @@ elif page == PAGES[3]:
             use_container_width=True, hide_index=True,
         )
 
-        # Certifications
+        
         st.subheader("🏅 Worker Certifications")
         cert_rows = run_query("""
             MATCH (w:Worker)-[:HAS_CERTIFICATION]->(c:Certification)
@@ -444,7 +420,7 @@ elif page == PAGES[3]:
             st.dataframe(cert_df.rename(columns={"worker": "Worker", "certs": "Certifications"}),
                          use_container_width=True, hide_index=True)
 
-        # Station-16 cover query (Gjutning / Per Gustafsson scenario)
+        
         st.subheader("🔍 Coverage Query: Who covers Gjutning when Per Gustafsson is away?")
         gjut_rows = run_query("""
             MATCH (target:Station {name: 'Gjutning'})
@@ -461,9 +437,7 @@ elif page == PAGES[3]:
             st.info("No data for Gjutning station (may not exist in graph).")
 
 
-# ===========================================================================
-# PAGE 5 — Spatial Map (Bonus B)
-# ===========================================================================
+
 elif page == PAGES[4]:
     st.markdown("""
     <div class="page-header">
@@ -471,7 +445,7 @@ elif page == PAGES[4]:
         <p>Factory floor layout color-coded by current load (Week 8)</p>
     </div>""", unsafe_allow_html=True)
 
-    # Get load for latest week
+    
     rows = run_query("""
         MATCH ()-[r:SCHEDULED_AT {week: 'w8'}]->(s:Station)
         RETURN s.code AS code, s.name AS name, sum(r.actual_hours) AS hours, sum(r.planned_hours) AS planned
@@ -483,7 +457,7 @@ elif page == PAGES[4]:
         df = pd.DataFrame(rows)
         df["variance"] = (df["hours"] / df["planned"]).fillna(0)
         
-        # Define station coordinates (3x4 grid approx)
+        
         coords = {
             "011": (0, 3), "012": (1, 3), "013": (2, 3), "014": (3, 3),
             "015": (0, 2), "016": (1, 2), "017": (2, 2), "018": (3, 2),
@@ -496,18 +470,18 @@ elif page == PAGES[4]:
             if row["code"] not in coords: continue
             x, y = coords[row["code"]]
             
-            # Color based on variance
+            
             v = row["variance"]
             color = "#4ade80" if v <= 1.0 else ("#fbbf24" if v <= 1.1 else "#f87171")
             
-            # Draw station as a box
+            
             fig.add_shape(
                 type="rect", x0=x, y0=y, x1=x+0.8, y1=y+0.8,
                 line=dict(color="#334155", width=2),
                 fillcolor=color,
             )
             
-            # Label
+            
             fig.add_annotation(
                 x=x+0.4, y=y+0.4, text=f"<b>{row['code']}</b><br>{row['hours']:.0f}h",
                 showarrow=False, font=dict(color="white" if v > 1.1 else "black", size=12)
@@ -527,9 +501,7 @@ elif page == PAGES[4]:
         st.info("💡 Green: ≤ Planned | Yellow: < 10% Over | Red: > 10% Over")
 
 
-# ===========================================================================
-# PAGE 6 — Self-Test
-# ===========================================================================
+
 elif page == PAGES[5]:
     st.markdown("""
     <div class="page-header">
@@ -540,7 +512,7 @@ elif page == PAGES[5]:
     def run_self_test(driver):
         checks = []
 
-        # Check 1: Connection
+        
         try:
             with driver.session() as s:
                 s.run("RETURN 1")
@@ -550,23 +522,23 @@ elif page == PAGES[5]:
             return checks
 
         with driver.session() as s:
-            # Check 2: Node count
+            
             count = s.run("MATCH (n) RETURN count(n) AS c").single()["c"]
             checks.append((f"{count} nodes (min: 50)", count >= 50, 3))
 
-            # Check 3: Relationship count
+            
             count = s.run("MATCH ()-[r]->() RETURN count(r) AS c").single()["c"]
             checks.append((f"{count} relationships (min: 100)", count >= 100, 3))
 
-            # Check 4: Node labels
+            
             count = s.run("CALL db.labels() YIELD label RETURN count(label) AS c").single()["c"]
             checks.append((f"{count} node labels (min: 6)", count >= 6, 3))
 
-            # Check 5: Relationship types
+            
             count = s.run("CALL db.relationshipTypes() YIELD relationshipType RETURN count(relationshipType) AS c").single()["c"]
             checks.append((f"{count} relationship types (min: 8)", count >= 8, 3))
 
-            # Check 6: Variance query (adapted to schema)
+            
             rows = s.run("""
                 MATCH (p:Project)-[r:SCHEDULED_AT]->(s:Station)
                 WHERE r.actual_hours > r.planned_hours * 1.1
@@ -628,7 +600,7 @@ elif page == PAGES[5]:
     else:
         st.info("Click **Run Self-Test** to check your graph against all 6 criteria.")
 
-        # Show what each check does
+        
         checks_info = [
             ("CHECK 1 — 3 pts", "Neo4j connection alive"),
             ("CHECK 2 — 3 pts", "Node count ≥ 50"),
