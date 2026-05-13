@@ -1,18 +1,3 @@
-"""
-seed_graph.py
-=============
-Populates a Neo4j AuraDB instance with the VSAB Factory production knowledge graph.
-Safe to run multiple times (uses MERGE, not CREATE).
-
-Usage:
-    python seed_graph.py
-
-Requires a .env file with:
-    NEO4J_URI=neo4j+s://xxxxx.databases.neo4j.io
-    NEO4J_USER=neo4j
-    NEO4J_PASSWORD=your-password
-"""
-
 import os
 import csv
 from pathlib import Path
@@ -37,9 +22,7 @@ def read_csv(filename):
         return list(csv.DictReader(f))
 
 
-# ---------------------------------------------------------------------------
-# Constraints (idempotent)
-# ---------------------------------------------------------------------------
+
 CONSTRAINTS = [
     "CREATE CONSTRAINT IF NOT EXISTS FOR (n:Project)      REQUIRE n.id         IS UNIQUE",
     "CREATE CONSTRAINT IF NOT EXISTS FOR (n:Product)      REQUIRE n.type        IS UNIQUE",
@@ -58,9 +41,7 @@ def create_constraints(session):
     print("  ✅ Constraints ready")
 
 
-# ---------------------------------------------------------------------------
-# Nodes
-# ---------------------------------------------------------------------------
+
 def seed_projects(session, rows):
     print("Seeding Project nodes…")
     seen = set()
@@ -177,9 +158,7 @@ def seed_workers(session, worker_rows):
     print(f"  ✅ {len(worker_rows)} workers")
 
 
-# ---------------------------------------------------------------------------
-# Relationships
-# ---------------------------------------------------------------------------
+
 def seed_production_relationships(session, rows):
     print("Seeding production relationships…")
     count = 0
@@ -216,7 +195,7 @@ def seed_production_relationships(session, rows):
             completed=completed,
         )
 
-        # Project -[:ACTIVE_IN]-> Week
+        
         session.run(
             """
             MATCH (proj:Project {id: $pid}), (w:Week {id: $week})
@@ -226,7 +205,7 @@ def seed_production_relationships(session, rows):
             week=r["week"],
         )
 
-        # Station -[:USED_IN]-> Week  (with demand)
+        
         session.run(
             """
             MATCH (s:Station {code: $scode}), (w:Week {id: $week})
@@ -240,7 +219,7 @@ def seed_production_relationships(session, rows):
             actual=actual,
         )
 
-        # Etapp -[:BELONGS_TO]-> Project
+        
         etapp_id = f"{r['project_id']}_{r['etapp']}_{r['bop']}"
         session.run(
             """
@@ -258,7 +237,7 @@ def seed_production_relationships(session, rows):
 def seed_worker_relationships(session, worker_rows):
     print("Seeding worker relationships…")
     for r in worker_rows:
-        # Worker -[:WORKS_AT]-> Station (primary)
+        
         session.run(
             """
             MATCH (w:Worker {id: $wid}), (s:Station {code: $scode})
@@ -268,7 +247,7 @@ def seed_worker_relationships(session, worker_rows):
             scode=r["primary_station"],
         )
 
-        # Worker -[:CAN_COVER]-> Station (secondary)
+        
         for code in r["can_cover_stations"].split(","):
             code = code.strip()
             if code and code != r["primary_station"]:
@@ -281,7 +260,7 @@ def seed_worker_relationships(session, worker_rows):
                     scode=code,
                 )
 
-        # Worker -[:HAS_CERTIFICATION]-> Certification
+        
         for cert in r["certifications"].split(","):
             cert = cert.strip()
             if cert:
@@ -325,9 +304,7 @@ def seed_capacity_relationships(session, capacity_rows):
     print(f"  ✅ {len(capacity_rows)} capacity weeks")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+
 def main():
     if not URI or not PASSWORD:
         raise EnvironmentError(
@@ -346,7 +323,7 @@ def main():
     with driver.session() as session:
         create_constraints(session)
 
-        # --- Nodes ---
+        
         seed_projects(session, production)
         seed_products(session, production)
         seed_stations(session, production)
@@ -354,7 +331,7 @@ def main():
         seed_etapps(session, production)
         seed_workers(session, workers)
 
-        # --- Relationships ---
+        
         seed_production_relationships(session, production)
         seed_worker_relationships(session, workers)
         seed_capacity_relationships(session, capacity)
