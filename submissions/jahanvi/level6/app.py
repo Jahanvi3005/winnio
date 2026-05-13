@@ -13,7 +13,11 @@ import plotly.graph_objects as go
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load environment variables from .env if present
+# This helps when running locally in nested folders
+from pathlib import Path
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -47,7 +51,12 @@ def get_driver():
         password = os.getenv("NEO4J_PASSWORD")
         
     if not uri or not password:
-        st.error("❌ Neo4j credentials missing! Please check .env or Streamlit Secrets.")
+        st.error("❌ Neo4j credentials missing!")
+        st.info(f"""
+        **How to fix:**
+        1. **Locally**: Ensure a `.env` file exists in `{Path(__file__).parent.absolute()}`
+        2. **Cloud**: Add `NEO4J_URI`, `NEO4J_USER`, and `NEO4J_PASSWORD` to your Streamlit Cloud Secrets.
+        """)
         st.stop()
         
     return GraphDatabase.driver(uri, auth=(user, password))
